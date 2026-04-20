@@ -5,7 +5,7 @@
 export class GroqWhisperModule {
   constructor() {
     // IMPORTANTE: Reemplaza este valor con tu API Key de Groq
-    this.apiKey = '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'; 
+    this.apiKey = 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; 
     this.mediaRecorder = null;
     this.audioChunks = [];
   }
