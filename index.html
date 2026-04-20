@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Cliente - Conversor de Audio a Texto</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans">
+
+    <div class="max-w-lg w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        
+        <header class="bg-indigo-600 p-6 text-center">
+            <h1 class="text-2xl font-bold text-white">Audio a Texto</h1>
+            <p class="text-indigo-200 text-sm mt-1">Desarrollado con Groq Whisper</p>
+        </header>
+
+        <div class="p-6 space-y-6">
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button id="btnRecord" class="flex flex-col items-center justify-center p-6 border-2 border-indigo-100 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-colors group">
+                    <span class="text-3xl mb-2 group-hover:scale-110 transition-transform">🎤</span>
+                    <span class="font-bold text-slate-700 text-sm">Grabar Voz</span>
+                </button>
+
+                <label class="flex flex-col items-center justify-center p-6 border-2 border-emerald-100 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer group">
+                    <span class="text-3xl mb-2 group-hover:scale-110 transition-transform">📁</span>
+                    <span class="font-bold text-slate-700 text-sm text-center">Subir Archivo<br><span class="text-xs font-normal text-slate-500">(.mp3, .wav, .m4a)</span></span>
+                    <input type="file" id="inputFile" accept="audio/*" class="hidden">
+                </label>
+            </div>
+
+            <button id="btnStop" class="hidden w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors animate-pulse">
+                ⏹ Detener Grabación
+            </button>
+
+            <div id="previewSection" class="hidden p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Audio Seleccionado:</span>
+                    <button id="btnDiscard" class="text-xs text-red-500 hover:text-red-700 font-semibold">Descartar</button>
+                </div>
+                <audio id="audioPlayback" controls class="w-full h-10"></audio>
+                <button id="btnTranscribe" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md transition-colors">
+                    ✨ Convertir a Texto
+                </button>
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-xs font-bold text-slate-500 uppercase ml-1">Transcripción</label>
+                <div id="outputContainer" class="w-full min-h-[120px] max-h-[250px] overflow-y-auto p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 text-sm leading-relaxed">
+                    <span class="text-slate-400 italic">El texto generado aparecerá aquí...</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module">
+        import { GroqWhisperModule } from './groq-whisper.js';
+
+        const whisper = new GroqWhisperModule();
+        let currentAudio = null; // Puede ser un Blob (micrófono) o un File (subida)
+
+        // Referencias al DOM
+        const btnRecord = document.getElementById('btnRecord');
+        const btnStop = document.getElementById('btnStop');
+        const inputFile = document.getElementById('inputFile');
+        const previewSection = document.getElementById('previewSection');
+        const audioPlayback = document.getElementById('audioPlayback');
+        const btnTranscribe = document.getElementById('btnTranscribe');
+        const btnDiscard = document.getElementById('btnDiscard');
+        const outputContainer = document.getElementById('outputContainer');
+
+        // Función auxiliar para actualizar la UI
+        const resetUI = () => {
+            currentAudio = null;
+            previewSection.classList.add('hidden');
+            btnRecord.classList.remove('hidden');
+            inputFile.value = ""; // Limpiar input de archivo
+            outputContainer.innerHTML = '<span class="text-slate-400 italic">El texto generado aparecerá aquí...</span>';
+        };
+
+        // 1. Manejo del Micrófono
+        btnRecord.onclick = async () => {
+            try {
+                await whisper.startRecording();
+                btnRecord.classList.add('hidden');
+                btnStop.classList.remove('hidden');
+                outputContainer.innerHTML = '<span class="text-blue-500 italic font-semibold">Escuchando... habla ahora.</span>';
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        btnStop.onclick = async () => {
+            const data = await whisper.stopRecording();
+            currentAudio = data.blob;
+            audioPlayback.src = data.url;
+            
+            btnStop.classList.add('hidden');
+            previewSection.classList.remove('hidden');
+            outputContainer.innerHTML = '<span class="text-slate-500 italic">Audio listo para procesar.</span>';
+        };
+
+        // 2. Manejo de Subida de Archivos
+        inputFile.onchange = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                resetUI(); // Limpiar el estado anterior
+                currentAudio = file;
+                audioPlayback.src = URL.createObjectURL(file);
+                
+                btnRecord.classList.add('hidden');
+                previewSection.classList.remove('hidden');
+                outputContainer.innerHTML = `<span class="text-slate-500 italic">Archivo cargado: ${file.name}</span>`;
+            }
+        };
+
+        // 3. Manejo de Descarte
+        btnDiscard.onclick = () => {
+            resetUI();
+        };
+
+        // 4. Proceso de Transcripción
+        btnTranscribe.onclick = async () => {
+            if (!currentAudio) return;
+
+            const originalBtnText = btnTranscribe.innerHTML;
+            btnTranscribe.disabled = true;
+            btnTranscribe.innerHTML = "⏳ Procesando...";
+            outputContainer.innerHTML = '<span class="text-indigo-500 font-semibold animate-pulse">Conectando con Groq...</span>';
+
+            try {
+                const resultText = await whisper.transcribe(currentAudio);
+                outputContainer.innerText = resultText;
+            } catch (err) {
+                outputContainer.innerHTML = `<span class="text-red-500 font-semibold">Error: ${err.message}</span>`;
+            } finally {
+                btnTranscribe.disabled = false;
+                btnTranscribe.innerHTML = originalBtnText;
+            }
+        };
+    </script>
+</body>
+</html>
