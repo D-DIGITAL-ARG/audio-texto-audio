@@ -61,7 +61,7 @@ export class GroqWhisperModule {
    * @returns {Promise<string>} El texto transcrito
    */
   async transcribe(audioFile) {
-    if (!this.apiKey || this.apiKey.includes("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")) {
+    if (!this.apiKey || this.apiKey === "") {
       throw new Error("Falta configurar la API Key en el archivo groq-whisper.js");
     }
 
